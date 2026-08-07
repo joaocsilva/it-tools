@@ -1,0 +1,8 @@
+---
+deployment:
+  tasks:
+    - export DEPLOYPATH=/home/joaocsilvacom/subdomains/tools.joaocsilva.com/
+    - for item in * .[!.]*; do /bin/rm -rf "${DEPLOYPATH}${item}"; done
+    - /bin/cp -a ./. "${DEPLOYPATH}"
+    - /bin/chmod 755 "${DEPLOYPATH}"
+    - /bin/mail -s "IT Tools deployment completed" geral@joaocsilva.com || echo 'fail'
