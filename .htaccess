@@ -1,0 +1,17 @@
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  RewriteBase /
+  RewriteRule ^index\.html$ - [L]
+  RewriteCond %{REQUEST_FILENAME} !-f
+  RewriteCond %{REQUEST_FILENAME} !-d
+  RewriteRule . /index.html [L]
+</IfModule>
+
+# Optional: restrict access, since it-tools ships with no login of its own.
+# Generate .htpasswd with: htpasswd -c .htpasswd yourusername
+# <IfModule mod_auth_basic.c>
+#     AuthType Basic
+#     AuthName "Restricted"
+#     AuthUserFile /home/user/subdomains/tools.example.com/.htpasswd
+#     Require valid-user
+# </IfModule>
