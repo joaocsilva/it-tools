@@ -1,0 +1,75 @@
+name: 'Deployment'
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  Deploy:
+    if: ${{ github.ref == 'refs/heads/main' && !contains(github.event.head_commit.message, '[skip-deploy]') }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: '.nvmrc'
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9.11.0
+
+      - name: Build
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm build
+
+      - name: Create package
+        run: |
+          cp .htaccess dist/.htaccess
+          cp .cpanel.yml dist/.cpanel.yml
+
+      - name: Ensure deploy branch exists
+        run: |
+          REPO_URL="https://${{ secrets.TOKEN_GITHUB }}@github.com/${{ github.repository }}.git"
+          if ! git ls-remote --exit-code --heads "$REPO_URL" deploy > /dev/null 2>&1; then
+            echo "deploy branch not found - creating it"
+            mkdir /tmp/empty-deploy && cd /tmp/empty-deploy
+            git init -q
+            git checkout -q --orphan deploy
+            git -c user.name='Joao Silva' -c user.email='geral@joaocsilva.com' commit -q --allow-empty -m "Initialize deploy branch"
+            git push -q "$REPO_URL" deploy
+          fi
+
+      - name: Deploy
+        run: |
+          git config --global user.name 'Joao Silva'
+          git config --global user.email 'geral@joaocsilva.com'
+          git clone --depth 1 --branch deploy 'https://${{ secrets.TOKEN_GITHUB }}@github.com/${{ github.repository }}.git' deploy
+          git -C deploy rm -rf .
+          cp -r dist/. deploy/
+          git -C deploy add .
+          
+          # Check if there are changes before committing
+          if [ -n "$(git -C deploy status --porcelain)" ]; then
+            git -C deploy commit -m "Deploy #${{ github.sha }}"
+            git -C deploy push origin deploy
+          else
+            echo "No changes to deploy"
+          fi
+
+      - name: CPanel
+        run: |
+          composer require phpcp/phpcp
+          php vendor/bin/phpcp repos --repo it-tools --no-interaction --cp-token=${{ secrets.CPANEL_JCS_AUTH }} --cp-base-url=${{ secrets.CPANEL_JCS_BASE_URL }}
+          php vendor/bin/phpcp pull it-tools --no-interaction --cp-token=${{ secrets.CPANEL_JCS_AUTH }} --cp-base-url=${{ secrets.CPANEL_JCS_BASE_URL }}
+          sleep 10
+          php vendor/bin/phpcp deploy it-tools --no-interaction --cp-token=${{ secrets.CPANEL_JCS_AUTH }} --cp-base-url=${{ secrets.CPANEL_JCS_BASE_URL }}
